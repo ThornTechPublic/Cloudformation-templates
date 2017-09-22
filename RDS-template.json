@@ -1,0 +1,434 @@
+{
+    "Mappings": {
+        "RegionMap": {
+            "us-east-1": {
+                "AMI": "ami-4fffc834"
+            },
+            "us-east-2": {
+                "AMI": "ami-ea87a78f"
+            },
+            "us-west-1": {
+                "AMI": "ami-3a674d5a"
+            },
+            "us-west-2": {
+                "AMI": "ami-aa5ebdd2"
+            }
+        }
+    },
+    "Metadata": {
+        "AWS::CloudFormation::Interface": {
+            "ParameterGroups": [
+                {
+                    "Label": {
+                        "default": "EC2 instance"
+                    },
+                    "Parameters": [
+                        "EC2Class",
+                        "KeyName"
+                    ]
+                },
+                {
+                    "Label": {
+                        "default": "Aurora DB"
+                    },
+                    "Parameters": [
+                        "DBClusterName",
+                        "DBPassword",
+                        "DBClass"
+                    ]
+                }
+            ],
+            "ParameterLabels": {
+                "AccountId": {
+                    "default": "AWS Account Id"
+                }
+            }
+        }
+    },
+    "Outputs": {
+        "EIPDNS": {
+            "Description": "Elastic IP address",
+            "Value": {
+                "Ref": "IPAddress"
+            }
+        },
+        "RDSEndpoint": {
+            "Description": "RDS Endpoint",
+            "Value": {
+                "Fn::GetAtt": [
+                    "AuroraDBCluster",
+                    "Endpoint.Address"
+                ]
+            }
+        }
+    },
+    "Parameters": {
+        "DBClass": {
+            "AllowedValues": [
+                "db.t2.small",
+                "db.t2.medium",
+                "db.r3.large",
+                "db.r3.xlarge",
+                "db.r3.2xlarge",
+                "db.r3.4xlarge",
+                "db.r3.8xlarge"
+            ],
+            "ConstraintDescription": "Must select a valid database instance type.",
+            "Default": "db.t2.small",
+            "Description": "DB instance type",
+            "Type": "String"
+        },
+        "DBClusterName": {
+            "AllowedPattern": "[a-zA-Z][a-zA-Z0-9]*",
+            "ConstraintDescription": "Must be alphanumeric and start with a letter.",
+            "Default": "testcluster",
+            "Description": "This is the name of your Aurora DB instance (e.g. testcluster)",
+            "MinLength": "2",
+            "Type": "String"
+        },
+        "DBPassword": {
+            "ConstraintDescription": "Must contain at least 8 characters. Do not use /, @, single, or double quotes.",
+            "Description": "Password for the Aurora DB master user account (you can reset this in RDS later if you forget). Must contain at least 8 characters. Do not use /, @, single, or double quotes.",
+            "MinLength": "8",
+            "NoEcho": true,
+            "Type": "String"
+        },
+        "EC2Class": {
+            "AllowedValues": [
+                "t2.micro",
+                "t2.small",
+                "t2.mediumm4.large",
+                "m4.xlarge"
+            ],
+            "ConstraintDescription": "Must select a valid EC2 instance type.",
+            "Default": "t2.micro",
+            "Description": "EC2 instance type",
+            "Type": "String"
+        },
+        "KeyName": {
+            "Description": "Name of an existing EC2 KeyPair to enable SSH access to the instance",
+            "Type": "AWS::EC2::KeyPair::KeyName"
+        }
+    },
+    "Resources": {
+        "AttachGateway": {
+            "Properties": {
+                "InternetGatewayId": {
+                    "Ref": "InternetGateway"
+                },
+                "VpcId": {
+                    "Ref": "MyVPC"
+                }
+            },
+            "Type": "AWS::EC2::VPCGatewayAttachment"
+        },
+        "AuroraDBA": {
+            "DeletionPolicy": "Delete",
+            "Properties": {
+                "AvailabilityZone": {
+                    "Fn::Select": [
+                        0,
+                        {
+                            "Fn::GetAZs": ""
+                        }
+                    ]
+                },
+                "DBClusterIdentifier": {
+                    "Ref": "AuroraDBCluster"
+                },
+                "DBInstanceClass": {
+                    "Ref": "DBClass"
+                },
+                "DBSubnetGroupName": {
+                    "Ref": "MyDBSubnetGroup"
+                },
+                "Engine": "aurora",
+                "EngineVersion": "5.6.10a",
+                "MultiAZ": "false",
+                "PubliclyAccessible": "false"
+            },
+            "Type": "AWS::RDS::DBInstance"
+        },
+        "AuroraDBB": {
+            "DeletionPolicy": "Delete",
+            "Properties": {
+                "AvailabilityZone": {
+                    "Fn::Select": [
+                        1,
+                        {
+                            "Fn::GetAZs": ""
+                        }
+                    ]
+                },
+                "DBClusterIdentifier": {
+                    "Ref": "AuroraDBCluster"
+                },
+                "DBInstanceClass": {
+                    "Ref": "DBClass"
+                },
+                "DBSubnetGroupName": {
+                    "Ref": "MyDBSubnetGroup"
+                },
+                "Engine": "aurora",
+                "EngineVersion": "5.6.10a",
+                "MultiAZ": "false",
+                "PubliclyAccessible": "false"
+            },
+            "Type": "AWS::RDS::DBInstance"
+        },
+        "AuroraDBCluster": {
+            "Properties": {
+                "AvailabilityZones": [
+                    {
+                        "Fn::Select": [
+                            0,
+                            {
+                                "Fn::GetAZs": ""
+                            }
+                        ]
+                    },
+                    {
+                        "Fn::Select": [
+                            1,
+                            {
+                                "Fn::GetAZs": ""
+                            }
+                        ]
+                    }
+                ],
+                "DBSubnetGroupName": {
+                    "Ref": "MyDBSubnetGroup"
+                },
+                "DatabaseName": {
+                    "Ref": "DBClusterName"
+                },
+                "Engine": "aurora",
+                "EngineVersion": "5.6.10a",
+                "MasterUserPassword": {
+                    "Ref": "DBPassword"
+                },
+                "MasterUsername": "admin",
+                "VpcSecurityGroupIds": [
+                    {
+                        "Ref": "RDSSecurityGroup"
+                    }
+                ]
+            },
+            "Type": "AWS::RDS::DBCluster"
+        },
+        "EC2SecurityGroup": {
+            "Properties": {
+                "GroupDescription": "Enable web traffic",
+                "SecurityGroupIngress": [
+                    {
+                        "CidrIp": "0.0.0.0/0",
+                        "FromPort": "80",
+                        "IpProtocol": "tcp",
+                        "ToPort": "80"
+                    },
+                    {
+                        "CidrIp": "0.0.0.0/0",
+                        "FromPort": "443",
+                        "IpProtocol": "tcp",
+                        "ToPort": "443"
+                    },
+                    {
+                        "CidrIp": "0.0.0.0/0",
+                        "FromPort": "22",
+                        "IpProtocol": "tcp",
+                        "ToPort": "22"
+                    }
+                ],
+                "VpcId": {
+                    "Ref": "MyVPC"
+                }
+            },
+            "Type": "AWS::EC2::SecurityGroup"
+        },
+        "IPAddress": {
+            "DependsOn": "AttachGateway",
+            "Properties": {
+                "Domain": "vpc",
+                "InstanceId": {
+                    "Ref": "WebServer"
+                }
+            },
+            "Type": "AWS::EC2::EIP"
+        },
+        "InternetGateway": {
+            "Type": "AWS::EC2::InternetGateway"
+        },
+        "MyDBSubnetGroup": {
+            "DependsOn": [
+                "PrivateSubnetA",
+                "PrivateSubnetB"
+            ],
+            "Properties": {
+                "DBSubnetGroupDescription": "Subnets available for the RDS DB Instance",
+                "SubnetIds": [
+                    {
+                        "Ref": "PrivateSubnetA"
+                    },
+                    {
+                        "Ref": "PrivateSubnetB"
+                    }
+                ]
+            },
+            "Type": "AWS::RDS::DBSubnetGroup"
+        },
+        "MyVPC": {
+            "Properties": {
+                "CidrBlock": "192.168.100.0/24"
+            },
+            "Type": "AWS::EC2::VPC"
+        },
+        "PrivateSubnetA": {
+            "Properties": {
+                "AvailabilityZone": {
+                    "Fn::Select": [
+                        0,
+                        {
+                            "Fn::GetAZs": ""
+                        }
+                    ]
+                },
+                "CidrBlock": "192.168.100.16/28",
+                "MapPublicIpOnLaunch": "false",
+                "VpcId": {
+                    "Ref": "MyVPC"
+                }
+            },
+            "Type": "AWS::EC2::Subnet"
+        },
+        "PrivateSubnetB": {
+            "Properties": {
+                "AvailabilityZone": {
+                    "Fn::Select": [
+                        1,
+                        {
+                            "Fn::GetAZs": ""
+                        }
+                    ]
+                },
+                "CidrBlock": "192.168.100.32/28",
+                "MapPublicIpOnLaunch": "false",
+                "VpcId": {
+                    "Ref": "MyVPC"
+                }
+            },
+            "Type": "AWS::EC2::Subnet"
+        },
+        "PublicDefaultRoute": {
+            "Properties": {
+                "DestinationCidrBlock": "0.0.0.0/0",
+                "GatewayId": {
+                    "Ref": "InternetGateway"
+                },
+                "RouteTableId": {
+                    "Ref": "PublicRouteTable"
+                }
+            },
+            "Type": "AWS::EC2::Route"
+        },
+        "PublicRouteAssociation": {
+            "Properties": {
+                "RouteTableId": {
+                    "Ref": "PublicRouteTable"
+                },
+                "SubnetId": {
+                    "Ref": "PublicSubnet"
+                }
+            },
+            "Type": "AWS::EC2::SubnetRouteTableAssociation"
+        },
+        "PublicRouteTable": {
+            "DependsOn": "AttachGateway",
+            "Properties": {
+                "VpcId": {
+                    "Ref": "MyVPC"
+                }
+            },
+            "Type": "AWS::EC2::RouteTable"
+        },
+        "PublicSubnet": {
+            "Properties": {
+                "CidrBlock": "192.168.100.0/28",
+                "MapPublicIpOnLaunch": "true",
+                "VpcId": {
+                    "Ref": "MyVPC"
+                }
+            },
+            "Type": "AWS::EC2::Subnet"
+        },
+        "RDSSecurityGroup": {
+            "DependsOn": "EC2SecurityGroup",
+            "Properties": {
+                "GroupDescription": "Security group for RDS DB Instance.",
+                "SecurityGroupIngress": [
+                    {
+                        "FromPort": "3306",
+                        "IpProtocol": "tcp",
+                        "SourceSecurityGroupId": {
+                            "Ref": "EC2SecurityGroup"
+                        },
+                        "ToPort": "3306"
+                    }
+                ],
+                "VpcId": {
+                    "Ref": "MyVPC"
+                }
+            },
+            "Type": "AWS::EC2::SecurityGroup"
+        },
+        "WebServer": {
+            "DependsOn": [
+                "AuroraDBA",
+                "AuroraDBB"
+            ],
+            "Properties": {
+                "ImageId": {
+                    "Fn::FindInMap": [
+                        "RegionMap",
+                        {
+                            "Ref": "AWS::Region"
+                        },
+                        "AMI"
+                    ]
+                },
+                "InstanceType": {
+                    "Ref": "EC2Class"
+                },
+                "KeyName": {
+                    "Ref": "KeyName"
+                },
+                "NetworkInterfaces": [
+                    {
+                        "AssociatePublicIpAddress": "true",
+                        "DeviceIndex": "0",
+                        "GroupSet": [
+                            {
+                                "Ref": "EC2SecurityGroup"
+                            }
+                        ],
+                        "SubnetId": {
+                            "Ref": "PublicSubnet"
+                        }
+                    }
+                ],
+                "UserData": {
+                    "Fn::Base64": {
+                        "Fn::Join": [
+                            "",
+                            [
+                                "#!/bin/bash",
+                                "\n",
+                                "sudo yum install mysql -y"
+                            ]
+                        ]
+                    }
+                }
+            },
+            "Type": "AWS::EC2::Instance"
+        }
+    }
+}
